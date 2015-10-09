@@ -6,28 +6,31 @@
 #include "test.h"
 
 
-#define CMP_RESULTS(f, v) do {                                     \
-  if ((result->v == NULL || test->v == NULL) && result->v != test->v) { \
-    return false;                                                   \
-  }                                                             \
-  if (f(result->v, test->v, result->v##_len) == false) {           \
-    return false;                                                   \
-  }                                                             \
+#define CMP_RESULTS(v) do {\
+  if (compare_strings(test->v, result->v, result->v##_len) == false) {\
+    return false;\
+  }\
 } while(0)
 
-static bool compare_strings(const char *expected, const char *got, size_t length) {
+static inline bool compare_strings(const char *expected, const char *got, size_t length) {
     if (expected == NULL && got == NULL)
         return true;
+    
+    if (expected == NULL || got == NULL)
+        return false;
+    
+    if (strlen(expected) != length) 
+        return false;
     
     return strncmp(got, expected, length) == 0;
 }
 
 static bool compare_test_results(const irc_parser_test_case *test, irc_parser_test_result *result) {
-    CMP_RESULTS(compare_strings, nick);
-    CMP_RESULTS(compare_strings, name);
-    CMP_RESULTS(compare_strings, host);
-    CMP_RESULTS(compare_strings, command);
-    CMP_RESULTS(compare_strings, param);
+    CMP_RESULTS(nick);
+    CMP_RESULTS(name);
+    CMP_RESULTS(host);
+    CMP_RESULTS(command);
+    CMP_RESULTS(param);
     
     return true;
 }
