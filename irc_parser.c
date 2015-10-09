@@ -8,7 +8,7 @@
 
 #define IRC_PARSER_APPEND_RAW(_parser, _a) do {               \
   _parser->raw[_parser->len++] = _a;                          \
-  if (_parser->len > 512) {                                   \
+  if (_parser->len > IRC_PARSER_RAW_BUFFER_SIZE) {                                   \
     _parser->state = IRC_STATE_ERROR;                         \
     _parser->error = IRC_ERROR_LENGTH;                        \
   }                                                           \
@@ -16,7 +16,7 @@
 
 //// private
 
-irc_parser_cb _irc_parser_get_cb(irc_parser *parser) {
+static irc_parser_cb _irc_parser_get_cb(irc_parser *parser) {
   switch(parser->state) {
   case IRC_STATE_INIT:
   case IRC_STATE_NICK:     return parser->on_nick;
@@ -31,7 +31,7 @@ irc_parser_cb _irc_parser_get_cb(irc_parser *parser) {
   }
 }
 
-enum irc_parser_state _irc_get_next_state(irc_parser *parser) {
+static enum irc_parser_state _irc_get_next_state(irc_parser *parser) {
   switch(parser->state) {
   case IRC_STATE_INIT:     return IRC_STATE_NICK;
   case IRC_STATE_NICK:     return IRC_STATE_NAME;
@@ -46,7 +46,7 @@ enum irc_parser_state _irc_get_next_state(irc_parser *parser) {
   }
 }
 
-void _irc_parser_force_call(irc_parser *parser, irc_parser_cb f) {
+static void _irc_parser_force_call(irc_parser *parser, irc_parser_cb f) {
   if (f == NULL) { return; }
 
   int result = f( parser
@@ -60,27 +60,38 @@ void _irc_parser_force_call(irc_parser *parser, irc_parser_cb f) {
   }
 }
 
-void _irc_parser_call(irc_parser *parser) {
+static void _irc_parser_call(irc_parser *parser) {
   _irc_parser_force_call(parser, _irc_parser_get_cb(parser));
 }
 
-void _irc_parser_progress_state(irc_parser *parser) {
-  parser->state = _irc_get_next_state(parser);
-  parser->last = parser->len;
+static void irc_parser_set_state(irc_parser *parser, enum irc_parser_state state) {
+    parser->state = state;
+    parser->last = parser->len;
 }
 
-void _irc_parser_call_and_progress(irc_parser *parser) {
+static void _irc_parser_progress_state(irc_parser *parser) {
+  irc_parser_set_state(parser, _irc_get_next_state(parser));
+}
+
+static void _irc_parser_call_and_progress(irc_parser *parser) {
   _irc_parser_call(parser);
   _irc_parser_progress_state(parser);
 }
 
-void _irc_parser_trigger_error(irc_parser *parser, const char *data, int offset,
+static void _irc_parser_trigger_error(irc_parser *parser, const char *data, int offset,
                                size_t len, enum irc_parser_error error) {
   parser->error = error;
   parser->state = IRC_STATE_ERROR;
   if (parser->on_error != NULL) {
     parser->on_error(parser, &data[offset], len - offset);
   }
+}
+
+static inline void irc_parser_switch_to_command_if_space_received(irc_parser *parser, char currentChar) {
+    if (currentChar == ' ') {
+        _irc_parser_call(parser);
+        irc_parser_set_state(parser, IRC_STATE_COMMAND);
+    }
 }
 
 //// public
@@ -98,7 +109,8 @@ void irc_parser_reset(irc_parser *parser) {
 }
 
 size_t irc_parser_execute(irc_parser *parser, const char *data, size_t len) {
-  for (size_t i = 0; i < len; i++) {
+  size_t i;
+  for (i = 0; i < len; i++) {
     switch(data[i]){
     case '\r':
       parser->state = IRC_STATE_END;
@@ -127,9 +139,11 @@ size_t irc_parser_execute(irc_parser *parser, const char *data, size_t len) {
         }
         break;
       case IRC_STATE_NICK:
-        IRC_PARSER_CALL_AND_PROGRESS_ON(parser, data[i], '!');
+        irc_parser_switch_to_command_if_space_received(parser, data[i]);
+        IRC_PARSER_CALL_AND_PROGRESS_ON(parser, data[i], '!');        
         break;
       case IRC_STATE_NAME:
+        irc_parser_switch_to_command_if_space_received(parser, data[i]);
         IRC_PARSER_CALL_AND_PROGRESS_ON(parser, data[i], '@');
         break;
       case IRC_STATE_HOST:
@@ -170,7 +184,7 @@ const char*  irc_parser_error_string(irc_parser *parser) {
   case IRC_ERROR_NONE:        return "No error.";
   case IRC_ERROR_PARSE:       return "Parse error.";
   case IRC_ERROR_UNDEF_STATE: return "parser entered undefined state.";
-  case IRC_ERROR_LENGTH:      return "Message length exceeded the 512 limit";
+  case IRC_ERROR_LENGTH:      return "Message length exceeded the RAW_BUFFER_SIZE limit";
   case IRC_ERROR_USER:        return "API user raised an error.";
   default:                    return "Undefined error state.";
   }

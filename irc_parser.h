@@ -1,6 +1,8 @@
 #ifndef irc_parser_h
 #define irc_parser_h
 
+#define IRC_PARSER_RAW_BUFFER_SIZE 512
+
 /**
  *
  */
@@ -82,7 +84,7 @@ struct irc_parser_s {
   int last;
   enum irc_parser_state state;
   enum irc_parser_error error;
-  char raw[513];
+  char raw[IRC_PARSER_RAW_BUFFER_SIZE+1];
 };
 
 /**

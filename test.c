@@ -1,17 +1,37 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 
 #include "test.h"
 
-#define CMP_RESULTS(v) do {                                     \
-  if ((result.v == NULL || c->v == NULL) && result.v != c->v) { \
-    return 0;                                                   \
+
+#define CMP_RESULTS(f, v) do {                                     \
+  if ((result->v == NULL || test->v == NULL) && result->v != test->v) { \
+    return false;                                                   \
   }                                                             \
-  if (strncmp(result.v, c->v, result.v##_len) != 0) {           \
-    return 0;                                                   \
+  if (f(result->v, test->v, result->v##_len) == false) {           \
+    return false;                                                   \
   }                                                             \
 } while(0)
+
+static bool compare_strings(const char *expected, const char *got, size_t length) {
+    if (expected == NULL && got == NULL)
+        return true;
+    
+    return strncmp(got, expected, length) == 0;
+}
+
+static bool compare_test_results(const irc_parser_test_case *test, irc_parser_test_result *result) {
+    CMP_RESULTS(compare_strings, nick);
+    CMP_RESULTS(compare_strings, name);
+    CMP_RESULTS(compare_strings, host);
+    CMP_RESULTS(compare_strings, command);
+    CMP_RESULTS(compare_strings, param);
+    
+    return true;
+}
+
 
 #define CPY_EXPECTED_RESULTS(k)                 \
   strncpy(k, res->k, res->k##_len);             \
@@ -20,56 +40,80 @@
 
 #define NUM_TESTS (sizeof(cases) / sizeof(irc_parser_test_case))
 
+/*
+     * From RFC 1459:
+     *  <message>  ::= [':' <prefix> <SPACE> ] <command> <params> <crlf>
+     *  <prefix>   ::= <servername> | <nick> [ '!' <user> ] [ '@' <host> ]
+     *  <command>  ::= <letter> { <letter> } | <number> <number> <number>
+     *  <SPACE>    ::= ' ' { ' ' }
+     *  <params>   ::= <SPACE> [ ':' <trailing> | <middle> <params> ]
+     *  <middle>   ::= <Any *non-empty* sequence of octets not including SPACE
+     *                 or NUL or CR or LF, the first of which may not be ':'>
+     *  <trailing> ::= <Any, possibly *empty*, sequence of octets not including
+     *                   NUL or CR or LF>
+*/
+
 const irc_parser_test_case cases[] = {
-  { "PRIVMSG #test :hello world!\r\n"
-  , NULL
-  , NULL
-  , NULL
-  , "PRIVMSG"
-  , "#test hello world!"
-  },
-  { ":lohkey!name@host PRIVMSG #test :hello test script!\r\n"
-  , "lohkey"
-  , "name"
-  , "host"
-  , "PRIVMSG"
-  , "#test hello test script!"
-  },
-  { "PRIVMSG lohkey :boo!\r\n"
-  , NULL
-  , NULL
-  , NULL
-  , "PRIVMSG"
-  , "lohkey boo!"
-  },
-  { ":lohkey!name@host NOTICE test :PM me again and ban hammer4u\r\n"
-  , "lohkey"
-  , "name"
-  , "host"
-  , "NOTICE"
-  , "test PM me again and ban hammer4u"
-  },
-  { "NOTICE lohkey :what about notices?\r\n"
-  , NULL
-  , NULL
-  , NULL
-  , "NOTICE"
-  , "lohkey what about notices?"
-  },
-  { "KICK #test test :for testing purposes\r\n"
-  , NULL
-  , NULL
-  , NULL
-  , "KICK"
-  , "#test test for testing purposes"
-  },
-  { ":lohkey!name@host KICK #test test :for testing purposes\r\n"
-  , "lohkey"
-  , "name"
-  , "host"
-  , "KICK"
-  , "#test test for testing purposes"
-  }
+    {":user JOIN :#channel\r\n",
+        "user",
+        NULL,
+        NULL,
+        "JOIN",
+        "#channel"},
+    {":user!name JOIN :#channel\r\n",
+        "user",
+        "name",
+        NULL,
+        "JOIN",
+        "#channel"},
+    {":user!name@host JOIN :#channel\r\n",
+        "user",
+        "name",
+        "host",
+        "JOIN",
+        "#channel"},
+    { "PRIVMSG #test :hello world!\r\n"
+        , NULL
+        , NULL
+        , NULL
+        , "PRIVMSG"
+        , "#test hello world!"},
+    { ":lohkey!name@host PRIVMSG #test :hello test script!\r\n"
+        , "lohkey"
+        , "name"
+        , "host"
+        , "PRIVMSG"
+        , "#test hello test script!"},
+    { "PRIVMSG lohkey :boo!\r\n"
+        , NULL
+        , NULL
+        , NULL
+        , "PRIVMSG"
+        , "lohkey boo!"},
+    { ":lohkey!name@host NOTICE test :PM me again and ban hammer4u\r\n"
+        , "lohkey"
+        , "name"
+        , "host"
+        , "NOTICE"
+        , "test PM me again and ban hammer4u"},
+    { "NOTICE lohkey :what about notices?\r\n"
+        , NULL
+        , NULL
+        , NULL
+        , "NOTICE"
+        , "lohkey what about notices?"},
+    { "KICK #test test :for testing purposes\r\n"
+        , NULL
+        , NULL
+        , NULL
+        , "KICK"
+        , "#test test for testing purposes"},
+    { ":lohkey!name@host KICK #test test :for testing purposes\r\n"
+        , "lohkey"
+        , "name"
+        , "host"
+        , "KICK"
+        , "#test test for testing purposes"}
 };
 
 // global state .... yup don't care right now
@@ -141,12 +185,10 @@ int on_param(irc_parser *parser, const char *at, size_t len) {
 
 int _passes_current_case() {
   const irc_parser_test_case *c = &cases[current_case];
-  CMP_RESULTS(nick);
-  CMP_RESULTS(name);
-  CMP_RESULTS(host);
-  CMP_RESULTS(command);
-  CMP_RESULTS(param);
-  return 1;
+  if (compare_test_results(c, &result))
+    return 1;
+  else
+    return 0;
 }
 
 void _reset_results() {
