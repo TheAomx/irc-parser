@@ -87,11 +87,19 @@ static void _irc_parser_trigger_error(irc_parser *parser, const char *data, int 
   }
 }
 
-static inline void irc_parser_switch_to_command_if_space_received(irc_parser *parser, char currentChar) {
-    if (currentChar == ' ') {
+static inline void irc_parser_switch_to_state_if_char_received(irc_parser *parser, char currentChar, char expectedChar, enum irc_parser_state state) {
+    if (currentChar == expectedChar) {
         _irc_parser_call(parser);
-        irc_parser_set_state(parser, IRC_STATE_COMMAND);
+        irc_parser_set_state(parser, state);
     }
+}
+
+static inline void irc_parser_switch_to_command_if_space_received(irc_parser *parser, char currentChar) {
+    irc_parser_switch_to_state_if_char_received(parser, currentChar, ' ', IRC_STATE_COMMAND);
+}
+
+static inline void irc_parser_switch_to_host_if_at_received(irc_parser *parser, char currentChar) {
+    irc_parser_switch_to_state_if_char_received(parser, currentChar, '@', IRC_STATE_HOST);
 }
 
 //// public
@@ -139,6 +147,7 @@ size_t irc_parser_execute(irc_parser *parser, const char *data, size_t len) {
         }
         break;
       case IRC_STATE_NICK:
+        irc_parser_switch_to_host_if_at_received(parser, data[i]);
         irc_parser_switch_to_command_if_space_received(parser, data[i]);
         IRC_PARSER_CALL_AND_PROGRESS_ON(parser, data[i], '!');        
         break;

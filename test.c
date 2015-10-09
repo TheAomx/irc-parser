@@ -69,6 +69,12 @@ const irc_parser_test_case cases[] = {
         NULL,
         "JOIN",
         "#channel"},
+    {":user@host JOIN :#channel\r\n",
+        "user",
+        NULL,
+        "host",
+        "JOIN",
+        "#channel"},
     {":user!name@host JOIN :#channel\r\n",
         "user",
         "name",
@@ -226,7 +232,12 @@ int on_error(irc_parser *parser, const char *at, size_t len) {
 void print_expected_results(irc_parser_test_result *res, const char *at, 
                             size_t len) {
   const irc_parser_test_case *c_case = &cases[current_case];
-  char nick[513], name[513], host[513], command[513], param[513];
+  char nick[IRC_PARSER_RAW_BUFFER_SIZE+1], 
+       name[IRC_PARSER_RAW_BUFFER_SIZE+1], 
+       host[IRC_PARSER_RAW_BUFFER_SIZE+1], 
+       command[IRC_PARSER_RAW_BUFFER_SIZE+1], 
+       param[IRC_PARSER_RAW_BUFFER_SIZE+1];
+  
   printf("At 0x%p(%zu)\n", at, len);
   printf("Expected: { raw: %s"
          "          , nick: %s\n"
