@@ -1,4 +1,4 @@
-IRC Parser  [![Build Status](https://secure.travis-ci.org/JosephMoniz/UnderscoreKit.png)](http://travis-ci.org/JosephMoniz/irc-parser)
+IRC Parser  [![Build Status](https://secure.travis-ci.org/TheAomx/UnderscoreKit.png)](http://travis-ci.org/TheAomx/irc-parser)
 ==========
 This is a reentrant and asynchronous IRC parser written in C. It is capable of
 parsing messages from IRC servers and clients. It is modeled after Ryan Dahl's
