@@ -53,10 +53,10 @@ static void _irc_parser_force_call(irc_parser *parser, irc_parser_cb f) {
                 , &parser->raw[parser->last]
                 , parser->len - parser->last - 1
                 );
-
-  // TODO: error checking
-  if (result) {
-    //
+  
+  if (result != 0) {
+    parser->state = IRC_STATE_ERROR;                         \
+    parser->error = IRC_ERROR_USER;    
   }
 }
 
@@ -113,7 +113,8 @@ void irc_parser_reset(irc_parser *parser) {
   parser->len    = 0;
   parser->last   = 0;
   parser->state  = IRC_STATE_INIT;
-  parser->raw[0] = '\0';
+  parser->error = IRC_ERROR_NONE;
+  memset(parser->raw, 0, IRC_PARSER_RAW_BUFFER_SIZE);
 }
 
 size_t irc_parser_execute(irc_parser *parser, const char *data, size_t len) {
@@ -188,15 +189,19 @@ enum irc_parser_error irc_parser_get_error(irc_parser *parser) {
   return parser->error;
 }
 
+const char* irc_parser_error_to_string(enum irc_parser_error error) {
+    switch (error) {
+        case IRC_ERROR_NONE: return "No error.";
+        case IRC_ERROR_PARSE: return "Parse error.";
+        case IRC_ERROR_UNDEF_STATE: return "parser entered undefined state.";
+        case IRC_ERROR_LENGTH: return "Message length exceeded the RAW_BUFFER_SIZE limit";
+        case IRC_ERROR_USER: return "API user raised an error.";
+        default: return "Undefined error state.";
+    }
+}
+
 const char*  irc_parser_error_string(irc_parser *parser) {
-  switch(parser->error) {
-  case IRC_ERROR_NONE:        return "No error.";
-  case IRC_ERROR_PARSE:       return "Parse error.";
-  case IRC_ERROR_UNDEF_STATE: return "parser entered undefined state.";
-  case IRC_ERROR_LENGTH:      return "Message length exceeded the RAW_BUFFER_SIZE limit";
-  case IRC_ERROR_USER:        return "API user raised an error.";
-  default:                    return "Undefined error state.";
-  }
+    return irc_parser_error_to_string(parser->error);
 }
 
 void irc_parser_settings_init(irc_parser_settings *settings,

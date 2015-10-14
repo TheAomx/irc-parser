@@ -146,6 +146,8 @@ size_t irc_parser_execute(irc_parser *parser, const char *data, size_t len);
  */
 int irc_parser_has_error(irc_parser *parser);
 
+const char* irc_parser_error_to_string(enum irc_parser_error error);
+
 /**
  * This function returns the enumerated value for the current
  * error state of the supplied parser.
