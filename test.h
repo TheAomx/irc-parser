@@ -4,6 +4,7 @@
 #include "irc_parser.h"
 
 typedef struct irc_parser_test_case_s irc_parser_test_case;
+typedef struct irc_parser_negative_test_case_s irc_parser_negative_test_case;
 typedef struct irc_parser_test_result_s irc_parser_test_result;
 
 struct irc_parser_test_case_s {
@@ -13,6 +14,11 @@ struct irc_parser_test_case_s {
   const char *host;
   const char *command;
   const char *param;
+};
+
+struct irc_parser_negative_test_case_s {
+  const char *test;
+  const enum irc_parser_error error;
 };
 
 struct irc_parser_test_result_s {

@@ -5,6 +5,7 @@
 
 #include "test.h"
 
+#define IRC_PARSER_TEST_BUFFER_SIZE 10000
 
 #define CMP_RESULTS(v) do {\
   if (compare_strings(test->v, result->v, result->v##_len) == false) {\
@@ -125,27 +126,30 @@ const irc_parser_test_case cases[] = {
         , "#test test for testing purposes"}
 };
 
+const irc_parser_negative_test_case negative_cases[] = {
+    {":user!name@host JOIN :#channel\r\n",
+            IRC_ERROR_NONE},
+    {":alongusernamethatwillbreakbuffers_alongusernamethatwillbreakbuffers_alongusernamethatwillbreakbuffers_alongusernamethatwillbreakbuffers_alongusernamethatwillbreakbuffers_alongusernamethatwillbreakbuffers_alongusernamethatwillbreakbuffers_alongusernamethatwillbreakbuffers_alongusernamethatwillbreakbuffers_alongusernamethatwillbreakbuffers_alongusernamethatwillbreakbuffers_alongusernamethatwillbreakbuffers_alongusernamethatwillbreakbuffers_alongusernamethatwillbreakbuffers_alongusernamethatwillbreakbuffers_alongusernamethatwillbreakbuffers_alongusernamethatwillbreakbuffers_alongusernamethatwillbreakbuffers_alongusernamethatwillbreakbuffers JOIN :#channel\r\n",
+        IRC_ERROR_LENGTH},
+};
+
 // global state .... yup don't care right now
 irc_parser_test_result result;
 irc_parser parser;
 irc_parser_settings settings;
-char param_buffer[1024];
+char param_buffer[IRC_PARSER_TEST_BUFFER_SIZE];
 int current_case = 0;
 int all_passing = 1;
 int tests_ran = 0;
-int input_size = 0;
 char *input;
 
 size_t _get_total_input_size() {
-  if (input_size) {
-    return input_size;
-  } else {
     size_t acc = 0;
     for (size_t i = 0; i < NUM_TESTS; i++) {
-      acc += strlen(cases[i].test);
+        acc += strlen(cases[i].test);
     }
     return acc;
-  }
+
 }
 
 void _build_input_buffer() {
@@ -229,14 +233,45 @@ int on_error(irc_parser *parser, const char *at, size_t len) {
   return 0;
 }
 
+void evaluate_negative_testcase(irc_parser *parser, int test_case) {
+    enum irc_parser_error irc_error = irc_parser_get_error(parser);
+    int passing = negative_cases[test_case].error == irc_error;
+    const char *got_error = irc_parser_error_to_string(irc_error);
+    const char *wanted_error = irc_parser_error_to_string(negative_cases[test_case].error);
+    
+    if (!passing) {
+        all_passing = 0;
+        printf("negative test case %d failed! got error = %s but wanted %s!", test_case, got_error, wanted_error);
+    }
+    
+    print_test_result(passing);
+}
+
+void next_negative_case(irc_parser *parser) {
+    current_case++;
+    irc_parser_reset(parser);
+}
+
+int on_negative_end(irc_parser *parser, const char *at, size_t len) {
+    evaluate_negative_testcase(parser, current_case);
+    next_negative_case(parser);
+    return 0;
+}
+
+int on_negative_error(irc_parser *parser, const char *at, size_t len) {
+    evaluate_negative_testcase(parser, current_case);
+    next_negative_case(parser);
+    return 0;
+}
+
 void print_expected_results(irc_parser_test_result *res, const char *at, 
                             size_t len) {
   const irc_parser_test_case *c_case = &cases[current_case];
-  char nick[IRC_PARSER_RAW_BUFFER_SIZE+1], 
-       name[IRC_PARSER_RAW_BUFFER_SIZE+1], 
-       host[IRC_PARSER_RAW_BUFFER_SIZE+1], 
-       command[IRC_PARSER_RAW_BUFFER_SIZE+1], 
-       param[IRC_PARSER_RAW_BUFFER_SIZE+1];
+  char nick[IRC_PARSER_TEST_BUFFER_SIZE+1], 
+       name[IRC_PARSER_TEST_BUFFER_SIZE+1], 
+       host[IRC_PARSER_TEST_BUFFER_SIZE+1], 
+       command[IRC_PARSER_TEST_BUFFER_SIZE+1], 
+       param[IRC_PARSER_TEST_BUFFER_SIZE+1];
   
   printf("At 0x%p(%zu)\n", at, len);
   printf("Expected: { raw: %s"
@@ -288,22 +323,59 @@ void next_case() {
   irc_parser_reset(&parser);
 }
 
-void run_tests() {
-  _build_input_buffer();
-  for (size_t i = 1; i < _get_total_input_size(); i++) {
-    int full_peices = _get_total_input_size() / i;
-    int remainding  = _get_total_input_size() % i;
-    for (int j = 0; j < full_peices; j++) {
-      irc_parser_execute(&parser, &input[i * j], i);   
+void run_sucessful_testsuite() {
+    for (size_t i = 0; i < NUM_TESTS; i++) {
+        const irc_parser_test_case *test_case = &cases[i];
+        irc_parser_execute(&parser, test_case->test, strlen(test_case->test));
     }
-    if (remainding) {
-      irc_parser_execute( &parser
-                        , &input[_get_total_input_size() - remainding]
-                        , remainding
-                        );
+}
+
+void run_permutaded_testsuite() {
+    _build_input_buffer();
+    for (size_t i = 1; i < _get_total_input_size(); i++) {
+        int full_peices = _get_total_input_size() / i;
+        int remainding = _get_total_input_size() % i;
+        for (int j = 0; j < full_peices; j++) {
+            irc_parser_execute(&parser, &input[i * j], i);
+        }
+        if (remainding) {
+            irc_parser_execute(&parser
+                    , &input[_get_total_input_size() - remainding]
+                    , remainding
+                    );
+        }
     }
+}
+
+void run_negative_testsuite() {
+    size_t num_negative_tests = (sizeof(negative_cases) / sizeof(irc_parser_negative_test_case));
+    
+    current_case = 0;
+    irc_parser negative_parser;
+    irc_parser_settings negative_settings;
+    irc_parser_settings_init( &negative_settings
+                          , NULL
+                          , NULL
+                          , NULL
+                          , NULL
+                          , NULL
+                          , on_negative_end
+                          , on_negative_error
+                          );
+  irc_parser_init(&negative_parser, &negative_settings);
+  
+  for (size_t i = 0; i < num_negative_tests; i++) {
+      const irc_parser_negative_test_case *test_case = &negative_cases[i];
+      irc_parser_execute(&negative_parser, test_case->test, strlen(test_case->test));
   }
-  printf("\nDone\n");
+}
+
+void run_tests() {
+    run_sucessful_testsuite();
+    run_permutaded_testsuite();
+    run_negative_testsuite();
+    printf("\nDone\n");
+
 }
 
 int main () {
