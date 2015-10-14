@@ -20,6 +20,6 @@ I'll develop a method to automate the abstraction of the inline documentation
 and parse it into the README here and also to dedicated a third party doc site.
 This is far from the highest of priorities right now though.
 
-High Value Targets
+Important note
 ------------------
- * Create documentation site and clean up this README
+ * This is an optimized version of JosephMoniz parser. It fixes some bugs in the parser and has some more test cases, that check for error states.
